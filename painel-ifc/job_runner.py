@@ -111,7 +111,10 @@ def curation_evidence_complete(payload: dict, required: set[str]) -> bool:
             expected.update((source, field, index) for index in range(len(items)))
     seen = set()
     for item in evidence:
-        if not isinstance(item, dict) or set(item) != {"source", "field", "item_index", "record_index", "quote"}:
+        required_keys = {"source", "field", "item_index", "record_index", "quote"}
+        if (not isinstance(item, dict) or not required_keys <= set(item)
+                or set(item) - required_keys - {"context"}
+                or ("context" in item and not isinstance(item["context"], dict))):
             return False
         source, field = item.get("source"), item.get("field")
         item_index, record_index, quote = item.get("item_index"), item.get("record_index"), item.get("quote")

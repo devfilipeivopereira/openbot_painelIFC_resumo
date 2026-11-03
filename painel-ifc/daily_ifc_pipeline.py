@@ -507,7 +507,10 @@ def validate_evidence(payload: dict, section_names: set[str], sources: dict) -> 
     }
     seen = set()
     for item in evidence:
-        if not isinstance(item, dict) or set(item) != {"source", "field", "item_index", "record_index", "quote"}:
+        required_keys = {"source", "field", "item_index", "record_index", "quote"}
+        if (not isinstance(item, dict) or not required_keys <= set(item)
+                or set(item) - required_keys - {"context"}
+                or ("context" in item and not isinstance(item["context"], dict))):
             raise PipelineError("curation_evidence_schema_invalid")
         source, field = item["source"], item["field"]
         item_index, record_index, quote = item["item_index"], item["record_index"], item["quote"]
