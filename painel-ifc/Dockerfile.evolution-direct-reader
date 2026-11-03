@@ -1,0 +1,5 @@
+FROM ifc-evolution-prisma-base:20261030
+WORKDIR /evolution
+COPY evolution_direct_db_reader.js /evolution/ifc_direct_db_reader.js
+USER 65534:65534
+ENTRYPOINT ["node", "/evolution/ifc_direct_db_reader.js"]

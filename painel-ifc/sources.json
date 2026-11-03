@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "sources": {
+    "evolution_grupos": {
+      "enabled": true,
+      "collector": "/app/collectors/evolution_groups.py",
+      "secret_files": [
+        "/run/secrets/evolution-apikey",
+        "/run/secrets/evolution-groups.json",
+        "/run/secrets/litellm-transcription.token"
+      ]
+    },
+    "evolution_mulheres": {
+      "enabled": true,
+      "collector": "/app/collectors/evolution_women.py",
+      "secret_files": [
+        "/run/secrets/evolution-global.h",
+        "/run/secrets/evolution-women.json",
+        "/run/secrets/litellm-transcription.token"
+      ]
+    },
+    "mensagens_diretas": {
+      "enabled": true,
+      "collector": "/app/collectors/evolution_direct.py",
+      "secret_files": [
+        "/run/secrets/evolution-apikey",
+        "/run/secrets/ifc-direct-contacts.json",
+        "/run/secrets/ifc-direct-reader.token",
+        "/run/secrets/litellm-transcription.token"
+      ]
+    },
+    "agenda": {
+      "enabled": true,
+      "collector": "/app/collectors/composio_calendar.py",
+      "secret_files": [
+        "/run/secrets/composio.key"
+      ]
+    },
+    "email_secretaria": {
+      "enabled": true,
+      "collector": "/app/collectors/composio_outlook.py",
+      "secret_files": [
+        "/run/secrets/composio.key"
+      ]
+    },
+    "n8n": {
+      "enabled": true,
+      "collector": "/app/collectors/n8n_status.py",
+      "secret_files": [
+        "/run/secrets/n8n.h"
+      ]
+    },
+    "todoist": {
+      "enabled": true,
+      "collector": "/app/collectors/composio_todoist.py",
+      "secret_files": [
+        "/run/secrets/composio.key"
+      ]
+    },
+    "financeiro": {
+      "enabled": true,
+      "collector": "/app/collectors/supabase_finance.py",
+      "secret_files": [
+        "/run/secrets/finance-gateway.token"
+      ]
+    },
+    "drive_secretaria": {
+      "enabled": true,
+      "collector": "/app/collectors/composio_drive.py",
+      "secret_files": [
+        "/run/secrets/composio.key"
+      ]
+    },
+    "visitantes": {
+      "enabled": true,
+      "collector": "/app/collectors/supabase_visitors.py",
+      "secret_files": [
+        "/run/secrets/visitors-n8n.token"
+      ]
+    },
+    "instagram": {
+      "enabled": true,
+      "collector": "/app/collectors/composio_instagram.py",
+      "secret_files": [
+        "/run/secrets/composio.key"
+      ]
+    },
+    "youtube": {
+      "enabled": true,
+      "collector": "/app/collectors/youtube_feed.py",
+      "secret_files": [],
+      "optional_capabilities": {
+        "authenticated_captions": {
+          "secret_files": ["/run/secrets/composio.key"],
+          "data_files": ["cache/youtube-composio-account.json"],
+          "cooldown_file": "cache/youtube-composio-cooldown.json"
+        }
+      }
+    }
+  }
+}

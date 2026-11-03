@@ -1,0 +1,1063 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model",
+    "reasoning",
+    "source_timestamps",
+    "record_coverage",
+    "sections",
+    "whatsapp_message",
+    "family_schedule",
+    "prayer_updates",
+    "direct_conversations",
+    "worship_updates",
+    "question_review",
+    "request_review",
+    "evidence"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "enum": [
+        "gpt-6-luna",
+        "tudo",
+        "freeai/tudo"
+      ]
+    },
+    "reasoning": {
+      "type": "string",
+      "enum": [
+        "high"
+      ]
+    },
+    "source_timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evolution_grupos",
+        "evolution_mulheres",
+        "mensagens_diretas",
+        "email_secretaria",
+        "instagram",
+        "drive_secretaria",
+        "youtube"
+      ],
+      "properties": {
+        "evolution_grupos": {
+          "type": "string"
+        },
+        "evolution_mulheres": {
+          "type": "string"
+        },
+        "mensagens_diretas": {
+          "type": "string"
+        },
+        "email_secretaria": {
+          "type": "string"
+        },
+        "instagram": {
+          "type": "string"
+        },
+        "drive_secretaria": {
+          "type": "string"
+        },
+        "youtube": {
+          "type": "string"
+        }
+      }
+    },
+    "record_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "drive_secretaria",
+        "instagram",
+        "grupos",
+        "mulheres",
+        "mensagens_diretas",
+        "email_secretaria",
+        "youtube"
+      ],
+      "properties": {
+        "drive_secretaria": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "instagram": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "grupos": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "mulheres": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "mensagens_diretas": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "email_secretaria": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "youtube": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grupos",
+        "mulheres",
+        "mensagens_diretas",
+        "email_secretaria",
+        "instagram",
+        "drive_secretaria",
+        "youtube"
+      ],
+      "properties": {
+        "grupos": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mulheres": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mensagens_diretas": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "email_secretaria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "instagram": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "drive_secretaria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "youtube": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sintese",
+            "temas",
+            "fatos",
+            "decisoes",
+            "pedidos",
+            "riscos",
+            "oportunidades",
+            "proximos_passos",
+            "insights"
+          ],
+          "properties": {
+            "sintese": {
+              "type": "string"
+            },
+            "temas": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "fatos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisoes": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "pedidos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "riscos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "oportunidades": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "proximos_passos": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            },
+            "insights": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "whatsapp_message": {
+      "type": "string",
+      "description": "Private draft of the morning summary, formatted for WhatsApp; never send from the curation process."
+    },
+    "family_schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events",
+        "uncertain"
+      ],
+      "properties": {
+        "events": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "date",
+              "time",
+              "location",
+              "title",
+              "people",
+              "source_ref",
+              "evidence"
+            ],
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "time": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "source_ref": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              },
+              "people": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "Filipe",
+                    "Renata",
+                    "Daniel",
+                    "Amanda",
+                    "todos"
+                  ]
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "uncertain": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "prayer_updates": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "prior_ref",
+          "source",
+          "record_index",
+          "person",
+          "text",
+          "evidence"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "new",
+              "update",
+              "resolve"
+            ]
+          },
+          "prior_ref": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "grupos",
+              "mulheres",
+              "mensagens_diretas"
+            ]
+          },
+          "record_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "person": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "direct_conversations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "person",
+          "request",
+          "response",
+          "status",
+          "insight",
+          "record_indexes"
+        ],
+        "properties": {
+          "person": {
+            "type": "string"
+          },
+          "request": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "insight": {
+            "type": "string"
+          },
+          "record_indexes": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "worship_updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "role",
+          "person",
+          "previous_person",
+          "operation",
+          "evidence",
+          "date_evidence",
+          "record_index"
+        ],
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "person": {
+            "type": "string"
+          },
+          "previous_person": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "date_evidence": {
+            "type": "string"
+          },
+          "record_index": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "question_review": {
+      "type": "array",
+      "maxItems": 3000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "record_index",
+          "question_index",
+          "disposition",
+          "field",
+          "item_index",
+          "quote"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "grupos",
+              "mulheres",
+              "mensagens_diretas",
+              "email_secretaria"
+            ]
+          },
+          "record_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "question_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "actionable_open",
+              "answered",
+              "informational",
+              "rhetorical"
+            ]
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "pedidos",
+              "proximos_passos",
+              "fatos",
+              "decisoes",
+              "temas"
+            ]
+          },
+          "item_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "request_review": {
+      "type": "array",
+      "maxItems": 3000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "record_index",
+          "request_index",
+          "disposition",
+          "field",
+          "item_index",
+          "quote"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "grupos",
+              "mulheres",
+              "mensagens_diretas",
+              "email_secretaria"
+            ]
+          },
+          "record_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "request_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "actionable_open",
+              "answered",
+              "informational",
+              "not_a_request"
+            ]
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "pedidos",
+              "proximos_passos",
+              "fatos",
+              "decisoes",
+              "temas"
+            ]
+          },
+          "item_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 6000,
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "record_index": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "temas",
+              "fatos",
+              "decisoes",
+              "pedidos",
+              "riscos",
+              "oportunidades",
+              "proximos_passos",
+              "insights"
+            ]
+          },
+          "quote": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "item_index": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "field",
+          "item_index",
+          "record_index",
+          "quote"
+        ]
+      }
+    }
+  }
+}

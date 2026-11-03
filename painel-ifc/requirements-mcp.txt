@@ -1,0 +1,5 @@
+mcp==1.30.0
+
+pypdf==5.9.0
+Pillow==11.3.0
+yt-dlp[default]==2026.10.26

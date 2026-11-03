@@ -1,0 +1,40 @@
+# Local credentials and runtime material
+*.env
+*.env.*
+!.env.example
+**/secrets/**
+**/secret/**
+**/data/**
+**/staging/**
+**/history/**
+**/cache/**
+**/raw/**
+**/published/**
+**/delivery/**
+**/digest-runs/**
+
+# Local Python/runtime artifacts
+Python/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Private source material and generated previews
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.log
+Painel ifc.pdf
+GRUPOS WHATSAPP.txt
+DADOS DE ACESSO VPS.env
+composio.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

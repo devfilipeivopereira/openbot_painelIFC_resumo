@@ -1,0 +1,5 @@
+FROM ghcr.io/berriai/litellm:main-stable
+USER 65534:65534
+WORKDIR /app
+COPY --chown=65534:65534 transcription_gateway.py /app/transcription_gateway.py
+ENTRYPOINT ["python3", "/app/transcription_gateway.py"]
