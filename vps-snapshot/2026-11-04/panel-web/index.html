@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <base href="/ifc-painel/">
+  <title>Painel IFC</title>
+  <link rel="stylesheet" href="painel.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#topo">IFC <span>Painel</span></a>
+    <div class="topmeta"><span class="live-dot"></span><span id="updated">Atualizando…</span><button id="menu-toggle" aria-label="Abrir histórico" title="Histórico">☰</button><button id="refresh" aria-label="Atualizar painel" title="Atualizar">↻</button></div>
+  </header>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar" aria-label="Histórico diário">
+      <div class="sidebar-heading"><span class="sidebar-kicker">PAINEL IFC</span><h2>Histórico</h2><p>Consulte as atualizações anteriores.</p></div>
+      <button id="today-link" class="history-today" type="button"><span>◉</span><span><b>Painel de hoje</b><small id="today-date">Atualização atual</small></span></button>
+      <div class="history-label">DIAS ANTERIORES</div>
+      <nav id="history-list" class="history-list" aria-label="Dias salvos"><p class="history-loading">Carregando dias salvos…</p></nav>
+      <div class="history-note">Cada publicação diária fica disponível aqui.</div>
+    </aside>
+    <button id="sidebar-scrim" class="sidebar-scrim" aria-label="Fechar histórico"></button>
+    <main id="topo">
+    <section class="hero">
+      <div class="eyebrow">IGREJA DA FAMÍLIA CRISTÃ <span id="today"></span></div>
+      <h1>Precisa de você hoje</h1>
+      <p>Prioridades, agenda da semana e sinais da comunidade em uma visão rápida para decidir o próximo passo.</p>
+      <div class="hero-foot"><span>Visão diária · IFC</span><span class="private-label">● Atualização do painel</span></div>
+    </section>
+    <div id="curation-status" class="curation-status" role="status" aria-live="polite" hidden></div>
+    <div id="error" class="error" hidden></div>
+    <section id="dashboard-search" class="dashboard-search" aria-label="Busca no painel">
+      <label for="dashboard-search-input">Busca simples</label>
+      <div class="dashboard-search-controls">
+        <input id="dashboard-search-input" type="search" placeholder="Pessoa, pedido, escala, prazo ou assunto" autocomplete="off">
+        <button id="dashboard-search-clear" type="button">Limpar</button>
+      </div>
+      <p id="dashboard-search-status" role="status" aria-live="polite">A busca encontra registros sem ocultar as demais informações.</p>
+      <div id="dashboard-search-results" class="dashboard-search-results" hidden></div>
+    </section>
+    <label class="mobile-section-nav" for="section-jump">Ir para uma seção<select id="section-jump"><option value="">Escolha uma seção…</option></select></label>
+    <nav id="toc" class="toc" aria-label="Navegação do painel"></nav>
+    <div id="sections"></div>
+    <footer><span>Painel IFC</span><span>Atualizado <time id="footer-updated">—</time></span></footer>
+    </main>
+  </div>
+  <script src="painel.js" defer></script>
+  <script src="painel-extra.js" defer></script>
+</body>
+</html>
