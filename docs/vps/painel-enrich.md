@@ -46,3 +46,11 @@ Horários: 07:05, 14:05 e 23:05 (horário de Brasília), logo depois da publica�
 - `membros`/`admins` só têm nomes de exibição (contatos do painel > name/pushName); qualquer nome com 8+ dígitos é descartado. Nenhum telefone/JID de pessoa vai para dados.json.
 - Verificação: Célula 040a05c9 → 7/7; Célula 5cdf7570 → 11/11; mtime de dados.json preservado.
 - Rollback: `cp -p /opt/ifc-painel/mcp/panel_enrich.py.bak-jid-20261104 /opt/ifc-painel/mcp/panel_enrich.py && python3 /opt/ifc-painel/mcp/panel_enrich.py --force`
+
+
+## 04/11 11:05 — homens_fora / agenda_fora / total_ifc_estimado na VPS
+- Antes só no box (`membros_grupos_ifc_v2.xlsx`, gerada uma vez da agenda do celular de 22/10/2026 + lista de homens; sem fonte automática).
+- Agora: base estática de chaves de telefone em `mcp/secrets/ifc-base-contatos.json` (0600, não vai para a saída). `base_contatos()` conta ao vivo quem da base não está em nenhum grupo IFC lido nesta rodada.
+- Saída: `painel_ifc.base_contatos = {"homens_fora", "agenda_fora", "total_ifc_estimado" (config, 720), "total_ifc_estimado_tipo": "estimado (config)", "base_homens", "base_agenda", "fonte"}`.
+- Limite: contatos novos fora da base não aparecem; para renovar, regerar a planilha e recopiar o JSON.
+- Rollback: `cp -p mcp/panel_enrich.py.bak-box2vps-20261104 mcp/panel_enrich.py && python3 mcp/panel_enrich.py --force`
