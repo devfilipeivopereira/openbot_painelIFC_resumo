@@ -1,0 +1,2 @@
+# IFC painel/resumo health check (alerta so ao numero fixo do Filipe)
+55 7,14,23 * * * root /usr/bin/python3 /opt/ifc-painel/mcp/healthcheck.py >>/var/log/ifc-healthcheck.log 2>&1

@@ -1,0 +1,1 @@
+*/5 * * * * root /usr/bin/python3 /opt/ifc-painel/mcp/sync_history.py >>/var/log/ifc-panel-history-sync.log 2>&1
