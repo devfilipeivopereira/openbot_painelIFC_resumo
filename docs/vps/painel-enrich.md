@@ -36,3 +36,13 @@ Atualizar Painel IFC (modo VPS, econômico). Não leia nenhuma fonte (WhatsApp, 
 7. Não mude o layout, a ordem das seções nem o template. Não envie nada no WhatsApp. Ao final, responda só: "📊 Painel IFC atualizado pela VPS (<vps_atualizado_em>): https://cursor.com/canvas/store-ea3f629f-b3ff-4b52-8b2f-00f5e20767f2/71171228-d779-4ce3-a91c-b9ca79c7f788"
 
 Horários: 07:05, 14:05 e 23:05 (horário de Brasília), logo depois da publicação da VPS.
+
+
+## 04/11 10:40 — participantes por JID do grupo
+- `participantes()` agora identifica cada grupo pelo **JID da Evolution** (`GET /group/participants/{inst}?groupJid=`, só leitura), não pelo nome. Grupos homônimos (ex.: dois "Célula") deixam de compartilhar a lista.
+- Formato de cada item em `painel_ifc.participantes[]`:
+  `{"id": "<sha256(JID do grupo)[:8]>", "g": "<nome>", "label": "<nome desambiguado, ex. Célula (11 membros)>", "c": "<categoria>", "t": total, "a": admins, "s": sem_nome, "admins": [nomes], "membros": [nomes]}`
+  Em erro: `{"id","g","label","c","erro"}`.
+- `membros`/`admins` só têm nomes de exibição (contatos do painel > name/pushName); qualquer nome com 8+ dígitos é descartado. Nenhum telefone/JID de pessoa vai para dados.json.
+- Verificação: Célula 040a05c9 → 7/7; Célula 5cdf7570 → 11/11; mtime de dados.json preservado.
+- Rollback: `cp -p /opt/ifc-painel/mcp/panel_enrich.py.bak-jid-20261104 /opt/ifc-painel/mcp/panel_enrich.py && python3 /opt/ifc-painel/mcp/panel_enrich.py --force`
