@@ -1,0 +1,9 @@
+# Histórico dos painéis (schema historico no Supabase). Criado 29/10/2026 pelo Remi.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Coleta matinal (n8n 5h50) + Pluggy webhook: a cada 3 h, minuto 10
+10 */3 * * * root /opt/paineis-historico/coletar_vps.py >> /var/log/paineis-historico.log 2>&1
+# Coleta matinal logo depois das 5h50
+5 6 * * * root /opt/paineis-historico/coletar_vps.py >> /var/log/paineis-historico.log 2>&1
+# Dump diário só do schema historico (30 diários + 12 mensais)
+40 3 * * * root /opt/paineis-historico/backup_historico.sh >> /var/log/paineis-historico.log 2>&1

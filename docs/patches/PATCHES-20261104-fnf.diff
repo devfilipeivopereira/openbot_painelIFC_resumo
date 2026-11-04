@@ -1,0 +1,296 @@
+--- whatsapp_delivery.py.bak-fnf-202611040731	2026-11-04 01:49:36.998844454 -0300
++++ whatsapp_delivery.py	2026-11-04 07:51:10.400719085 -0300
+@@ -88,20 +88,47 @@
+    raise ValueError('delivery_not_confirmed_no_retry') from None
+   atomic(ledger,{'status':'accepted_by_evolution','at':now.isoformat(),'message_id':message_id,'purpose':'test' if test else 'scheduled_digest','edition':edition})
+   return {'status':'accepted_by_evolution','day':day,'edition':edition,'purpose':'test' if test else 'scheduled_digest','degraded':degraded}
++def prep_running():
++ """True while daily_ifc_pipeline.py holds its lock (preparation still in progress)."""
++ try:
++  with open('/run/lock/ifc-daily-panel.lock','a+') as fh:
++   try:fcntl.flock(fh,fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(fh,fcntl.LOCK_UN);return False
++   except BlockingIOError:return True
++ except OSError:return False
++def manifest_ready(edition,now):
++ suffix="" if edition=="matinal" else "."+edition
++ f=ROOT/(now.date().isoformat()+suffix+'.json')
++ try:
++  d=json.loads(f.read_text())
++  age=(now-datetime.fromisoformat(d['generated_at']).astimezone(now.tzinfo)).total_seconds()
++  return d.get('day')==now.date().isoformat() and d.get('status')=='prepared_not_sent' and d.get('edition','matinal')==edition and 0<=age<=10800
++ except Exception:return False
+ if __name__=='__main__':
+  _h=datetime.now(ZoneInfo('America/Sao_Paulo')).hour;edition='matinal' if _h<12 else 'tarde' if _h<20 else 'noturno'
+  is_test=sys.argv[1:]==['--test']
+  try:
+-  if sys.argv[1:] not in ([],['--check'],['--check-fallback'],['--send'],['--scheduled'],['--test']):raise ValueError('unsupported_option')
++  if sys.argv[1:] not in ([],['--check'],['--check-fallback'],['--send'],['--send-fallback'],['--scheduled'],['--test']):raise ValueError('unsupported_option')
+   scheduled=sys.argv[1:]==['--scheduled']
++  current=datetime.now(ZoneInfo('America/Sao_Paulo'))
++  fb=False
+   if scheduled:
+-   current=datetime.now(ZoneInfo('America/Sao_Paulo'))
+-   if not (current.hour in (7,14,23) and current.minute<=45):raise SystemExit(0)
+-  fb=scheduled and datetime.now(ZoneInfo('America/Sao_Paulo')).minute>=40
+-  if sys.argv[1:]==['--check-fallback']:fb=True
+-  result=execute((scheduled or sys.argv[1:] in (['--send'],['--test'])) and sys.argv[1:]!=['--check-fallback'],edition,is_test,fb)
++   # window 00..55 of 07/14/23h; prep windows end at :55 of the previous hour
++   if not (current.hour in (7,14,23) and current.minute<=55):raise SystemExit(0)
++   running=prep_running()
++   if not manifest_ready(edition,current):
++    # artifact missing/invalid: send the fallback right away unless a preparation is still running;
++    # if one is running, wait for it until minute 50 (then send the fallback, never nothing).
++    fb=(not running) or current.minute>=50
++    if not fb:
++     print(json.dumps({'status':'waiting_preparation','edition':edition,'purpose':'scheduled_digest','checked_at':current.isoformat()}));raise SystemExit(0)
++   else:
++    fb=current.minute>=40
++  if sys.argv[1:] in (['--check-fallback'],['--send-fallback']):fb=True
++  do_send=(scheduled or sys.argv[1:] in (['--send'],['--test'],['--send-fallback']))
++  result=execute(do_send,edition,is_test,fb)
+   result.update(edition=edition,purpose='test' if is_test else 'scheduled_digest',checked_at=datetime.now(ZoneInfo('America/Sao_Paulo')).isoformat())
+   print(json.dumps(result))
++ except SystemExit:raise
+  except Exception as error:
+   print(json.dumps({'status':'failed','reason':str(error) if isinstance(error,ValueError) else type(error).__name__,
+                     'edition':edition,'purpose':'test' if is_test else 'scheduled_digest',
+--- daily_ifc_pipeline.py.bak-fnf-202611040732	2026-11-04 01:51:17.696537233 -0300
++++ daily_ifc_pipeline.py	2026-11-04 07:50:52.204003471 -0300
+@@ -1893,7 +1893,24 @@
+                 reason = str(exc)
+                 if not re.fullmatch(r"[a-z_]{1,80}", reason):
+                     reason = "family_validation_invalid"
+-                raise PipelineError("family_schedule_validation_failed:" + reason) from None
++                # degrade (04/11): drop invalid family items instead of failing the whole edition
++                DEGRADED["family_validation_degraded:" + reason] = 1
++                kept = []
++                events = family_payload.get("events") if isinstance(family_payload, dict) else None
++                for item in events if isinstance(events, list) else []:
++                    try:
++                        save_family_schedule({"events": kept + [item], "uncertain": []}, family_sources)
++                        kept.append(item)
++                    except (ValueError, KeyError, TypeError, AttributeError):
++                        DEGRADED["family_events_dropped"] = DEGRADED.get("family_events_dropped", 0) + 1
++                uncertain = family_payload.get("uncertain") if isinstance(family_payload, dict) else None
++                try:
++                    family_result = save_family_schedule({"events": kept, "uncertain": uncertain if isinstance(uncertain, list) else []}, family_sources)
++                except (ValueError, KeyError, TypeError):
++                    try:
++                        family_result = save_family_schedule({"events": [], "uncertain": []}, family_sources)
++                    except (ValueError, KeyError, TypeError):
++                        raise PipelineError("family_schedule_validation_failed:" + reason) from None
+             try:
+                 prayer_result = save_prayers(prayer_rows, curated.pop("prayer_updates", None), sources)
+             except (ValueError, KeyError, TypeError):
+@@ -2036,3 +2053,16 @@
+             write_panel_curation_status("curation_not_ready", reason_code)
+         print(json.dumps({"status": "failed", "reason": str(exc)}, ensure_ascii=False))
+         raise SystemExit(1)
++    except SystemExit:
++        raise
++    except Exception as exc:  # never exit without a JSON status line (was: pipeline_output_not_json)
++        import traceback
++        traceback.print_exc(file=sys.stderr)
++        tb = traceback.extract_tb(exc.__traceback__)
++        where = ("_line" + str(tb[-1].lineno)) if tb else ""
++        try:
++            write_panel_curation_status("curation_not_ready", "pipeline_crash")
++        except Exception:
++            pass
++        print(json.dumps({"status": "failed", "reason": "crash_" + type(exc).__name__ + where}, ensure_ascii=False))
++        raise SystemExit(1)
+--- digest_schedule.py.bak-fnf-202611040732	2026-11-03 23:23:26.743442117 -0300
++++ digest_schedule.py	2026-11-04 07:31:35.710656336 -0300
+@@ -1,94 +1,98 @@
+-#!/usr/bin/env python3
+-"""Run each IFC edition once at its Brasília preparation time, independent of host timezone."""
+-import fcntl,json,os,subprocess,tempfile
+-from pathlib import Path
+-from datetime import datetime
+-from zoneinfo import ZoneInfo
+-import re
+-ROOT=Path('/opt/ifc-painel/mcp')
+-def due_edition(now):
+- fixed={(6,15):'matinal',(13,15):'tarde',(22,10):'noturno'}.get((now.hour,now.minute))
+- if fixed:return fixed
+- if now.hour==6 and 20<=now.minute<=55:return 'matinal'
+- if now.hour==13 and 20<=now.minute<=55:return 'tarde'
+- if now.hour==22 and 15<=now.minute<=55:return 'noturno'
+- return None
+-def sync_published_history():
+- try:
+-  result=subprocess.run(['/usr/bin/python3',str(ROOT/'sync_history.py')],capture_output=True,text=True,timeout=90)
+-  payload=json.loads(result.stdout)
+-  return result.returncode==0 and payload.get('status')=='ok' and payload.get('failed')==0
+- except (OSError,subprocess.TimeoutExpired,ValueError,TypeError):return False
+-def main():
+- now=datetime.now(ZoneInfo('America/Sao_Paulo'));edition=due_edition(now)
+- publication=('painel_manha' if now.hour==7 and now.minute>=5 else
+-              'painel_tarde' if now.hour==14 and now.minute>=5 else
+-              'painel_noturno' if now.hour==23 and now.minute>=5 else None)
+- if not edition and not publication:return
+- folder=ROOT/'digest-runs';folder.mkdir(mode=0o700,exist_ok=True)
+- with (folder/'schedule.lock').open('a+') as lock:
+-  os.chmod(lock.name,0o600)
+-  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+-  except BlockingIOError:return
+-  if publication:
+-   prepared=folder/(now.date().isoformat()+'.'+publication+'.json')
+-   if not prepared.exists() or json.loads(prepared.read_text()).get('status')!='finished':
+-    # Fallback: use the most recent preparation of the same day that finished (matinal/painel/noturno).
+-    finished=[]
+-    for name in ('matinal','painel_08','painel_1330','tarde','noturno'):
+-     candidate=folder/(now.date().isoformat()+'.'+name+'.json')
+-     try:
+-      data=json.loads(candidate.read_text())
+-      if data.get('status')=='finished' and datetime.fromisoformat(data['started_at'])<=now:finished.append((data['started_at'],candidate))
+-     except (OSError,KeyError,ValueError,TypeError):pass
+-    if not finished:
+-     print(json.dumps({'status':'publication_blocked','reason':'preparation_not_finished','slot':publication}));return
+-    prepared=sorted(finished)[-1][1]
+-   curation=Path('/var/lib/docker/volumes/ifc-mcp-state/_data/data/curation/ifc-curation.json')
+-   began=datetime.fromisoformat(json.loads(prepared.read_text())['started_at'])
+-   if not curation.exists() or curation.stat().st_mtime<began.timestamp():
+-    print(json.dumps({'status':'publication_blocked','reason':'curation_not_current','slot':publication}));return
+-  edition=edition or publication+'-publish'
+-  marker=folder/(now.date().isoformat()+'.'+edition+'.json')
+-  attempt=1
+-  if marker.exists():
+-   try:previous=json.loads(marker.read_text())
+-   except (OSError,ValueError,TypeError):return
+-   if publication and previous.get('status')=='published_history_pending':
+-    if sync_published_history():
+-     previous.update(status='finished',history_synced=True,finished_at=now.isoformat())
+-     save_state=marker.with_name('.history-retry-'+marker.name)
+-     save_state.write_text(json.dumps(previous));os.chmod(save_state,0o600);os.replace(save_state,marker)
+-    return
+-   if edition not in ('matinal','tarde','noturno','painel_manha-publish','painel_tarde-publish','painel_noturno-publish') or previous.get('status')!='failed':return
+-   attempt=int(previous.get('attempt',1))+1
+-   if attempt>(3 if publication else 2):return
+-   try:last=datetime.fromisoformat(previous.get('finished_at',previous['started_at']))
+-   except (KeyError,ValueError,TypeError):return
+-   if last.tzinfo is None or (now-last).total_seconds()<300:return
+-  def save(value):
+-   fd,tmp=tempfile.mkstemp(dir=folder,prefix='.run-');os.fchmod(fd,0o600)
+-   with os.fdopen(fd,'w') as stream:json.dump(value,stream)
+-   os.replace(tmp,marker)
+-  save({'status':'started','edition':edition,'started_at':now.isoformat(),'window_hours':24,'attempt':attempt})
+-  env=dict(os.environ,IFC_DIGEST_EDITION=edition,IFC_DEFER_PANEL_PUBLICATION="1");env.pop('IFC_REUSE_CURRENT_COLLECTION',None)
+-  try:
+-   command=['docker','exec','ifc-mcp','python3','/app/job_runner.py','publish'] if publication else ['/usr/bin/python3',str(ROOT/'daily_ifc_pipeline.py')]
+-   run=subprocess.run(command,capture_output=True,text=True,env=env,timeout=3000)
+-   try:result=json.loads(run.stdout.strip().splitlines()[-1])
+-   except (ValueError,IndexError):result={}
+-   valid=run.returncode==0 and (result.get('published') is True if publication else result.get('status') in ('ok','partial_success') and result.get('summary_delivery') in ('prepared_not_sent','not_requested'))
+-   history_synced=sync_published_history() if publication and valid else None
+-   status='published_history_pending' if publication and valid and not history_synced else 'finished' if valid else 'failed'
+-   reason=result.get('reason') if isinstance(result.get('reason'),str) else None
+-   if reason and not re.fullmatch(r'[A-Za-z0-9:_-]{1,160}',reason):reason='redacted'
+-   if not valid and not reason:
+-    reason='pipeline_output_not_json' if not result else 'summary_not_prepared' if not publication else 'publish_not_confirmed'
+-   model_route=result.get('model_route') if result.get('model_route') in ('codex_auth','litellm_alias','unknown') else None
+-   primary_reason=result.get('primary_model_reason') if isinstance(result.get('primary_model_reason'),str) else None
+-   if primary_reason and not re.fullmatch(r'[A-Za-z0-9:_;,=.-]{1,240}',primary_reason):primary_reason='redacted'
+-   save({'status':status,'edition':edition,'started_at':now.isoformat(),'finished_at':datetime.now(ZoneInfo('America/Sao_Paulo')).isoformat(),'attempt':attempt,'exit_code':run.returncode,'window_hours':24,'history_synced':history_synced,'reason':reason if not valid else None,'model_route':model_route,'primary_model_reason':primary_reason})
+-   print(run.stdout[-2400:],flush=True)
+-  except Exception as error:
+-   save({'status':'failed','edition':edition,'started_at':now.isoformat(),'finished_at':datetime.now(ZoneInfo('America/Sao_Paulo')).isoformat(),'attempt':attempt,'reason':type(error).__name__});raise
+-if __name__=='__main__':main()
++#!/usr/bin/env python3
++"""Run each IFC edition once at its Brasília preparation time, independent of host timezone."""
++import fcntl,json,os,subprocess,tempfile
++from pathlib import Path
++from datetime import datetime
++from zoneinfo import ZoneInfo
++import re
++ROOT=Path('/opt/ifc-painel/mcp')
++def due_edition(now):
++ fixed={(6,15):'matinal',(13,15):'tarde',(22,10):'noturno'}.get((now.hour,now.minute))
++ if fixed:return fixed
++ if now.hour==6 and 20<=now.minute<=55:return 'matinal'
++ if now.hour==13 and 20<=now.minute<=55:return 'tarde'
++ if now.hour==22 and 15<=now.minute<=55:return 'noturno'
++ return None
++def sync_published_history():
++ try:
++  result=subprocess.run(['/usr/bin/python3',str(ROOT/'sync_history.py')],capture_output=True,text=True,timeout=90)
++  payload=json.loads(result.stdout)
++  return result.returncode==0 and payload.get('status')=='ok' and payload.get('failed')==0
++ except (OSError,subprocess.TimeoutExpired,ValueError,TypeError):return False
++def main():
++ now=datetime.now(ZoneInfo('America/Sao_Paulo'));edition=due_edition(now)
++ publication=('painel_manha' if now.hour==7 and now.minute>=5 else
++              'painel_tarde' if now.hour==14 and now.minute>=5 else
++              'painel_noturno' if now.hour==23 and now.minute>=5 else None)
++ if not edition and not publication:return
++ folder=ROOT/'digest-runs';folder.mkdir(mode=0o700,exist_ok=True)
++ with (folder/'schedule.lock').open('a+') as lock:
++  os.chmod(lock.name,0o600)
++  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
++  except BlockingIOError:return
++  if publication:
++   prepared=folder/(now.date().isoformat()+'.'+publication+'.json')
++   if not prepared.exists() or json.loads(prepared.read_text()).get('status')!='finished':
++    # Fallback: use the most recent preparation of the same day that finished (matinal/painel/noturno).
++    finished=[]
++    for name in ('matinal','painel_08','painel_1330','tarde','noturno'):
++     candidate=folder/(now.date().isoformat()+'.'+name+'.json')
++     try:
++      data=json.loads(candidate.read_text())
++      if data.get('status')=='finished' and datetime.fromisoformat(data['started_at'])<=now:finished.append((data['started_at'],candidate))
++     except (OSError,KeyError,ValueError,TypeError):pass
++    if not finished:
++     print(json.dumps({'status':'publication_blocked','reason':'preparation_not_finished','slot':publication}));return
++    prepared=sorted(finished)[-1][1]
++   curation=Path('/var/lib/docker/volumes/ifc-mcp-state/_data/data/curation/ifc-curation.json')
++   began=datetime.fromisoformat(json.loads(prepared.read_text())['started_at'])
++   if not curation.exists() or curation.stat().st_mtime<began.timestamp():
++    print(json.dumps({'status':'publication_blocked','reason':'curation_not_current','slot':publication}));return
++  edition=edition or publication+'-publish'
++  marker=folder/(now.date().isoformat()+'.'+edition+'.json')
++  attempt=1
++  if marker.exists():
++   try:previous=json.loads(marker.read_text())
++   except (OSError,ValueError,TypeError):return
++   if publication and previous.get('status')=='published_history_pending':
++    if sync_published_history():
++     previous.update(status='finished',history_synced=True,finished_at=now.isoformat())
++     save_state=marker.with_name('.history-retry-'+marker.name)
++     save_state.write_text(json.dumps(previous));os.chmod(save_state,0o600);os.replace(save_state,marker)
++    return
++   if edition not in ('matinal','tarde','noturno','painel_manha-publish','painel_tarde-publish','painel_noturno-publish') or previous.get('status')!='failed':return
++   attempt=int(previous.get('attempt',1))+1
++   if attempt>3:return
++   try:last=datetime.fromisoformat(previous.get('finished_at',previous['started_at']))
++   except (KeyError,ValueError,TypeError):return
++   if last.tzinfo is None or (now-last).total_seconds()<300:return
++  def save(value):
++   fd,tmp=tempfile.mkstemp(dir=folder,prefix='.run-');os.fchmod(fd,0o600)
++   with os.fdopen(fd,'w') as stream:json.dump(value,stream)
++   os.replace(tmp,marker)
++  save({'status':'started','edition':edition,'started_at':now.isoformat(),'window_hours':24,'attempt':attempt})
++  env=dict(os.environ,IFC_DIGEST_EDITION=edition,IFC_DEFER_PANEL_PUBLICATION="1");env.pop('IFC_REUSE_CURRENT_COLLECTION',None)
++  try:
++   command=['docker','exec','ifc-mcp','python3','/app/job_runner.py','publish'] if publication else ['/usr/bin/python3',str(ROOT/'daily_ifc_pipeline.py')]
++   run=subprocess.run(command,capture_output=True,text=True,env=env,timeout=3000)
++   try:result=json.loads(run.stdout.strip().splitlines()[-1])
++   except (ValueError,IndexError):result={}
++   valid=run.returncode==0 and (result.get('published') is True if publication else result.get('status') in ('ok','partial_success') and result.get('summary_delivery') in ('prepared_not_sent','not_requested'))
++   history_synced=sync_published_history() if publication and valid else None
++   status='published_history_pending' if publication and valid and not history_synced else 'finished' if valid else 'failed'
++   reason=result.get('reason') if isinstance(result.get('reason'),str) else None
++   if reason and not re.fullmatch(r'[A-Za-z0-9:_-]{1,160}',reason):reason='redacted'
++   if not valid and not reason:
++    reason='pipeline_output_not_json' if not result else 'summary_not_prepared' if not publication else 'publish_not_confirmed'
++   model_route=result.get('model_route') if result.get('model_route') in ('codex_auth','litellm_alias','unknown') else None
++   primary_reason=result.get('primary_model_reason') if isinstance(result.get('primary_model_reason'),str) else None
++   if primary_reason and not re.fullmatch(r'[A-Za-z0-9:_;,=.-]{1,240}',primary_reason):primary_reason='redacted'
++   save({'status':status,'edition':edition,'started_at':now.isoformat(),'finished_at':datetime.now(ZoneInfo('America/Sao_Paulo')).isoformat(),'attempt':attempt,'exit_code':run.returncode,'window_hours':24,'history_synced':history_synced,'reason':reason if not valid else None,'model_route':model_route,'primary_model_reason':primary_reason})
++   print(run.stdout[-2400:],flush=True)
++   if run.returncode!=0 and run.stderr:
++    errlog=folder/(now.date().isoformat()+'.'+edition+'.attempt'+str(attempt)+'.stderr.txt')
++    errlog.write_text(run.stderr[-8000:]);os.chmod(errlog,0o600)
++    print(json.dumps({'stderr_tail_saved':str(errlog)}),flush=True)
++  except Exception as error:
++   save({'status':'failed','edition':edition,'started_at':now.isoformat(),'finished_at':datetime.now(ZoneInfo('America/Sao_Paulo')).isoformat(),'attempt':attempt,'reason':type(error).__name__});raise
++if __name__=='__main__':main()

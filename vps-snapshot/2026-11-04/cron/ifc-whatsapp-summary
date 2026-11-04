@@ -1,0 +1,2 @@
+# Python enforces 07:00 and 23:15 America/Sao_Paulo; separate edition ledgers.
+*/5 * * * * root /usr/bin/python3 /opt/ifc-painel/mcp/whatsapp_delivery.py --scheduled >>/var/log/ifc-whatsapp-summary.log 2>&1

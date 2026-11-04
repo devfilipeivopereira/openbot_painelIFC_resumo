@@ -1,0 +1,1 @@
+*/5 * * * * root /usr/bin/python3 /opt/ifc-painel/mcp/sync_daily_artifacts.py >>/var/log/ifc-artifact-history.log 2>&1
