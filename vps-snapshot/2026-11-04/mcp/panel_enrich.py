@@ -5,7 +5,7 @@ Fontes (todas leitura): Supabase public.visitantes / transactions (psql read-onl
 Evolution GET /group/participants + POST /chat/findMessages (Louvor), Composio Instagram (coletor do container, só leitura),
 staging do ifc-mcp (mensagens_diretas, evolution_mulheres). Nunca grava telefones/JIDs na saída.
 Cada parte falha sozinha e cai no último valor bom (cache). Preserva mtime/dono/modo do dados.json."""
-import json, os, re, sys, time, fcntl, tempfile, subprocess, datetime as dt, urllib.parse
+import hashlib, json, os, re, sys, time, fcntl, tempfile, subprocess, datetime as dt, urllib.parse
 from pathlib import Path
 import requests
 PANEL = Path("/opt/ifc-painel/published/dados.json")
@@ -17,7 +17,7 @@ BRT = dt.timezone(dt.timedelta(hours=-3)); NOW = dt.datetime.now(BRT)
 N8N_FLOWS = {"8EfOLwKPt2duN3Qhz_I0y": "IFC - Visitantes - Webhook Baserow WhatsApp V2", "gafW6vM_9WfzbsQYXsYaZ": "Mensagens Visitantes",
     "cOiLM1zYMqVMsrWR": "Visitantes - Verificar Respostas", "4pbQKo6woOtsvaojQlKLP": "Formulario Encorajar", "mBDblVN3QDTRNNf0": "Instagram Direct → IFC",
     "jO8Dguoh1MdjHmuT_jJ2k": "", "D4j4mH6biMZ3zLOdtvMHd": "", "Y5NlHw4XFFxrtSVLVwU8w": ""}
-LOUVOR_JID = "<JID-REDACTED>@g.us"
+LOUVOR_JID = "554899412339-1449606142@g.us"
 def hdr(path, name):
     for l in Path(path).read_text().splitlines():
         if l.lower().startswith(name.lower() + ":"): return l.split(":", 1)[1].strip()
@@ -83,23 +83,48 @@ def n8n():
     return out
 
 def participantes(contatos):
+    """Participantes por grupo, identificados pelo JID do grupo na Evolution (não pelo nome).
+    Saída sem telefones/JIDs de pessoas: só nomes de exibição. 'id' = hash curto do JID do grupo."""
     K = {"apikey": evo_key()}; ids = {}
     for c in contatos or []:
-        if c.get("evolution_id") and c.get("nome"): ids[c["evolution_id"]] = c["nome"]
+        n = c.get("nome")
+        if not n or n == "***": continue
+        for k in (c.get("evolution_id"), c.get("telefone")):
+            if k: ids[k] = n; ids[str(k).split("@")[0]] = n
+    def limpa_nome(n):
+        n = (n or "").strip()
+        return "" if re.search(r"\d{8,}", re.sub(r"[\s+()\-.]", "", n)) else n
+    def nome_de(p):
+        for k in (p.get("id"), p.get("jid"), p.get("phoneNumber"), p.get("lid")):
+            if k and (ids.get(k) or ids.get(str(k).split("@")[0])): return limpa_nome(ids.get(k) or ids.get(str(k).split("@")[0]))
+        return limpa_nome(p.get("name") or p.get("pushName") or p.get("notify"))
     G = json.loads((SEC / "evolution-groups.json").read_text()); W = json.loads((SEC / "evolution-women.json").read_text())
     alvo = [(g["name"], g["remote_jid"], g.get("category", ""), G["instance"]) for g in G["groups"]] + [("Mulheres IFC", W["remote_jid"], "Ministério de Mulheres", W["instance"])]
     out = []
     for nome, jid, cat, inst in alvo:
+        gid = hashlib.sha256(jid.encode()).hexdigest()[:8]
         try:
             r = requests.get(f"{EVO}/group/participants/{urllib.parse.quote(inst)}", params={"groupJid": jid}, headers=K, timeout=60).json()
             ps = r.get("participants", r) if isinstance(r, dict) else r
+            if not isinstance(ps, list) or not all(isinstance(p, dict) for p in ps): raise LookupError("sem_acesso")
             adm = [p for p in ps if p.get("admin")]
-            nomes_adm = sorted({ids.get(p.get("id")) or ids.get(p.get("jid")) or ids.get(p.get("phoneNumber")) or "" for p in adm} - {""})
-            sem = sum(1 for p in ps if not (ids.get(p.get("id")) or ids.get(p.get("jid")) or ids.get(p.get("phoneNumber")) or p.get("name") or p.get("pushName")))
-            out.append({"g": nome, "c": cat, "t": len(ps), "a": len(adm), "s": sem, "admins": nomes_adm})
+            nomes_adm = sorted({nome_de(p) for p in adm} - {""})
+            membros = sorted([n for n in map(nome_de, ps) if n], key=str.casefold)
+            sem = sum(1 for p in ps if not nome_de(p))
+            out.append({"id": gid, "g": nome, "label": nome, "c": cat, "t": len(ps), "a": len(adm), "s": sem, "admins": nomes_adm, "membros": membros})
         except Exception as e:
-            out.append({"g": nome, "c": cat, "erro": type(e).__name__})
+            out.append({"id": gid, "g": nome, "label": nome, "c": cat, "erro": type(e).__name__})
         time.sleep(0.3)
+    cont = {}
+    for x in out: cont[x["g"]] = cont.get(x["g"], 0) + 1
+    for x in out:
+        if cont[x["g"]] > 1:
+            x["label"] = f'{x["g"]} ({x["t"]} membros)' if "t" in x else f'{x["g"]} #{x["id"][:4]}'
+    lab = {}
+    for x in out: lab.setdefault(x["label"], []).append(x)
+    for xs in lab.values():
+        if len(xs) > 1:
+            for x in xs: x["label"] += f' #{x["id"][:4]}'
     return out
 
 def stage(name):
