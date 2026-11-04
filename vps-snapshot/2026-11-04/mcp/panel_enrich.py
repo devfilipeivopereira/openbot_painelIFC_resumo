@@ -82,6 +82,23 @@ def n8n():
                     "ultima_status": last.get("status") if last else None, "ok7": ok, "err7": err, "status": st, "nota": "", "erro": None})
     return out
 
+FONES = set()
+def fone_key(d):
+    d = re.sub(r"\D", "", str(d or "").split("@")[0])
+    if len(d) in (10, 11): d = "55" + d
+    return d[:4] + d[-8:] if d.startswith("55") and len(d) in (12, 13) else d
+
+def base_contatos():
+    """homens_fora / agenda_fora / total_ifc_estimado (antes só no box). Base estática em secrets/ifc-base-contatos.json
+    (chaves de telefone, nunca vão para a saída); conta ao vivo quem NÃO está em nenhum grupo IFC lido agora."""
+    B = json.loads((SEC / "ifc-base-contatos.json").read_text())
+    if not FONES: raise RuntimeError("sem_participantes")
+    fora = lambda L: sum(1 for ks in L if not any(k in FONES for k in ks))
+    return {"homens_fora": fora(B["homens_fora"]), "agenda_fora": fora(B["agenda_fora"]),
+            "total_ifc_estimado": int(B.get("total_ifc_estimado", 720)), "total_ifc_estimado_tipo": "estimado (config)",
+            "base_homens": len(B["homens_fora"]), "base_agenda": len(B["agenda_fora"]),
+            "fonte": "agenda do celular + lista de homens, cópia estática de " + B.get("copiado_em", "")}
+
 def participantes(contatos):
     """Participantes por grupo, identificados pelo JID do grupo na Evolution (não pelo nome).
     Saída sem telefones/JIDs de pessoas: só nomes de exibição. 'id' = hash curto do JID do grupo."""
@@ -100,13 +117,17 @@ def participantes(contatos):
         return limpa_nome(p.get("name") or p.get("pushName") or p.get("notify"))
     G = json.loads((SEC / "evolution-groups.json").read_text()); W = json.loads((SEC / "evolution-women.json").read_text())
     alvo = [(g["name"], g["remote_jid"], g.get("category", ""), G["instance"]) for g in G["groups"]] + [("Mulheres IFC", W["remote_jid"], "Ministério de Mulheres", W["instance"])]
-    out = []
+    out = []; FONES.clear()
     for nome, jid, cat, inst in alvo:
         gid = hashlib.sha256(jid.encode()).hexdigest()[:8]
         try:
             r = requests.get(f"{EVO}/group/participants/{urllib.parse.quote(inst)}", params={"groupJid": jid}, headers=K, timeout=60).json()
             ps = r.get("participants", r) if isinstance(r, dict) else r
             if not isinstance(ps, list) or not all(isinstance(p, dict) for p in ps): raise LookupError("sem_acesso")
+            if cat in ("IFC", "Ministério de Mulheres"):
+                for p in ps:
+                    for k in (p.get("phoneNumber"), p.get("id"), p.get("jid")):
+                        if k and "@lid" not in str(k): FONES.add(fone_key(k))
             adm = [p for p in ps if p.get("admin")]
             nomes_adm = sorted({nome_de(p) for p in adm} - {""})
             membros = sorted([n for n in map(nome_de, ps) if n], key=str.casefold)
@@ -190,7 +211,8 @@ def main():
         out = dict(cache.get("painel_ifc") or {}); status = {}
         parts = [("visitantes", visitantes), ("financeiro_detalhe", financeiro), ("n8n", n8n), ("diretas_stats", diretas),
                  ("mulheres_stats", mulheres_msgs), ("louvor", louvor), ("instagram", instagram),
-                 ("participantes", lambda: participantes((data.get("participantes_grupos") or {}).get("contatos")))]
+                 ("participantes", lambda: participantes((data.get("participantes_grupos") or {}).get("contatos"))),
+                 ("base_contatos", base_contatos)]
         for k, f in parts:
             try: out[k] = f(); status[k] = "ok"
             except Exception as e: status[k] = "falhou (" + type(e).__name__ + "); último bom mantido" if k in out else "falhou (" + type(e).__name__ + ")"
