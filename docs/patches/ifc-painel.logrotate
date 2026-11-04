@@ -1,0 +1,9 @@
+/var/log/ifc-*.log {
+  su root syslog
+  weekly
+  rotate 6
+  compress
+  missingok
+  notifempty
+  copytruncate
+}
