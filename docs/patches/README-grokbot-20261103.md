@@ -11,3 +11,16 @@ Não sobrescreva estes arquivos sem reaplicar o patch.
 7. Frontend novo (Codex, 3 etapas) implantado 03/11 23:33: imagem ifc-panel:20261103-33-grokbot (anterior: ifc-panel:20261103-32; arquivos web/*.before-grokbot-front-20261103.bak). Reverter: docker service update --image ifc-panel:20261103-32 ifc-panel.
 8. Saude: /opt/ifc-painel/mcp/healthcheck.py (cron /etc/cron.d/ifc-healthcheck 07:55, 14:55, 23:55): smoke test do job_runner, containers, edicoes falhas/nao enviadas, lock preso >60 min, painel >26h, disco >90%; alerta 1x por problema/dia so ao numero fixo do Filipe. Logrotate: /etc/logrotate.d/ifc-painel (semanal, 6 copias).
 9. Resumo estilo n8n (Codex) NAO implantado: em /var/lib/docker/volumes/openbot-data/_data/work/digest-fix-20261103; precisa de execucao real do pipeline para validar.
+
+## 04/11 01:50 — degradação + estilo n8n (Grok Bot)
+- Painel: imagem ifc-panel:20261104-34-dedupe (dedupe "Precisa de você" e Agenda). Rollback: docker service update --image ifc-panel:20261103-33-grokbot ifc-panel
+- Pipeline: validações viram degradação (evidência duplicada/citação não encontrada descartadas, claims sem evidência removidas, reviews autocompletadas/redirecionadas, orações puladas, conversas faltantes com placeholder, agenda incompleta não bloqueia). Contadores em "degraded" no output.
+- Entrega: --scheduled a partir do minuto 40 envia resumo parcial (nota curta) ou aviso de falha + link do painel, nunca nada. text_polish.py limpa cabeçalhos vazios, dicas de onboarding do Todoist, bloco duplicado de pendências e linha de cobertura.
+- Rollback: cd /opt/ifc-painel/mcp; for f in daily_ifc_pipeline.py daily_artifacts.py whatsapp_delivery.py; do cp $f.bak-newstyle-202611040149 $f; done  (pré-degradação: *.bak-degrade-20261104001*)
+
+## 04/11 01:51 — ajustes finais
+- Finanças: resultado do mês = entradas − saídas (antes usava "saldo", inconsistente).
+- DMs: o encurtamento termina em oração completa (vírgula/;/" e ") e remove palavras soltas no fim (iria, de, para…); text_polish repete a limpeza.
+- Todoist: lista ampliada de dicas de onboarding excluídas também da contagem "+N sem prazo".
+- Cabeçalho por edição: ☀️ Resumo da manhã / 🌤️ Resumo da tarde / 🌙 Resumo do dia (text_polish, pela hora do envio).
+- Rollback deste passo: cd /opt/ifc-painel/mcp; for f in daily_artifacts.py daily_ifc_pipeline.py text_polish.py; do cp $f.bak-fix6-202611040151 $f; done
