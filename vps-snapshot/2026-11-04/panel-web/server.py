@@ -190,7 +190,7 @@ class Handler(SimpleHTTPRequestHandler):
     def api_ata(self):
         try:
             with ATA_FILE.open("r", encoding="utf-8") as f:
-                data = mask_all(json.load(f))
+                data = json.load(f)  # Ata: dados completos só com Basic Auth (pedido do Filipe 04/11 11:52)
             body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
