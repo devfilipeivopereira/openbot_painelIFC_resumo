@@ -12,6 +12,8 @@ Source code and reproduction guide for the IFC private dashboard and WhatsApp da
 - [OpenBot / Remi_2 integration](docs/OPENBOT.md)
 - [Security, privacy and backup requirements](docs/SECURITY.md)
 - [Known implementation boundaries](docs/STATUS.md)
+- [Continuidade / retomar noutro lugar (05/11)](docs/CONTINUIDADE.md)
+- [Snapshot VPS 05/11 (sanitizado)](vps-snapshot/2026-11-05/README.md)
 - [Frontend app README](painel-ifc/README.md)
 
 The directory `painel-ifc/` contains the application, collectors, pipeline, MCP gateway and deployment components. The `collector` code describes integrations, while all account-specific IDs, group catalogs, credentials, OAuth connections and recipient routing must be provisioned privately on the destination VPS.
