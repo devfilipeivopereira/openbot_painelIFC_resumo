@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""evo-db: read-only Evolution Postgres for Remi_2. Never prints credentials."""
+from __future__ import annotations
+import argparse, json, os, re, subprocess, sys
+from datetime import datetime, timezone, timedelta
+
+CONF = "/etc/evo-db/pg.env"
+SP = timezone(timedelta(hours=-3))
+MAX_ROWS = 200
+TEXT_EXPR = """COALESCE(
+  m.message->>'conversation',
+  m.message->'extendedTextMessage'->>'text',
+  m.message->'imageMessage'->>'caption',
+  m.message->'videoMessage'->>'caption',
+  m.message->'documentMessage'->>'fileName',
+  m.message->'buttonsResponseMessage'->>'selectedDisplayText',
+  m.message->'listResponseMessage'->>'title',
+  ''
+)"""
+ACCENT_SQL = (
+    "translate(lower({col}), "
+    "'áàâãäéèêëíìîïóòôõöúùûüçñ', "
+    "'aaaaaeeeeiiiiooooouuuucn')"
+)
+
+def load_conf():
+    cfg = {"PG_CONTAINER_MATCH": "postgres_postgres", "PG_DATABASE": "evolution", "PG_USER": "evo_ro"}
+    if os.path.exists(CONF):
+        with open(CONF) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
+
+def ctr(match):
+    r = subprocess.run(["docker", "ps", "-qf", f"name={match}"], capture_output=True, text=True, check=True)
+    name = (r.stdout.strip().splitlines() or [""])[0]
+    if not name:
+        raise SystemExit(f"container {match} nao encontrado")
+    return name
+
+def lit(s: str) -> str:
+    return "'" + str(s).replace("'", "''") + "'"
+
+def like_pat(s: str) -> str:
+    return "%" + s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+def fold_like(s: str) -> str:
+    table = str.maketrans(
+        "áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ",
+        "aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn",
+    )
+    return "%" + (s or "").translate(table).lower() + "%"
+
+def parse_desde(s):
+    if not s:
+        return None
+    s = s.strip()
+    if re.fullmatch(r"\d{9,}", s):
+        return int(s)
+    for fmt, n in (("%Y-%m-%dT%H:%M:%S", 19), ("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d", 10)):
+        try:
+            dt = datetime.strptime(s[:n], fmt).replace(tzinfo=SP)
+            return int(dt.astimezone(timezone.utc).timestamp())
+        except ValueError:
+            continue
+    raise SystemExit(f"--desde invalido: {s}")
+
+def ts_sp():
+    return "to_char(to_timestamp(m.\"messageTimestamp\") AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD\"T\"HH24:MI:SS-03:00')"
+
+def query_json(cfg, select_sql):
+    wrapped = "BEGIN TRANSACTION READ ONLY; SET LOCAL statement_timeout = '60s';\n" + select_sql + "\nCOMMIT;\n"
+    user = cfg["PG_USER"]
+    r = None
+    for attempt_user in (user, "postgres"):
+        cmd = [
+            "docker", "exec", "-i", ctr(cfg["PG_CONTAINER_MATCH"]),
+            "psql", "-U", attempt_user, "-d", cfg["PG_DATABASE"],
+            "-v", "ON_ERROR_STOP=1", "-At", "-P", "pager=off",
+        ]
+        r = subprocess.run(cmd, input=wrapped, capture_output=True, text=True)
+        if r.returncode == 0:
+            break
+        if attempt_user == user and ("does not exist" in (r.stderr or "") or "role" in (r.stderr or "").lower()):
+            continue
+        sys.stderr.write((r.stderr or "")[:1000] + "\n")
+        raise SystemExit(2)
+    lines = [ln for ln in r.stdout.splitlines() if ln.strip() and ln.strip() not in ("BEGIN", "COMMIT", "SET")]
+    blob = "\n".join(lines).strip()
+    if blob in ("", "null"):
+        return []
+    try:
+        return json.loads(blob)
+    except json.JSONDecodeError:
+        m = re.search(r"(\[.*\]|\{.*\})\s*$", blob, re.S)
+        if not m:
+            sys.stderr.write("saida nao-JSON\n")
+            raise SystemExit(2)
+        return json.loads(m.group(1))
+
+def out(data):
+    try:
+        sys.path.insert(0, "/opt/contatos"); import contato as _ct; data = _ct.enrich(data)
+    except Exception:
+        pass
+    print(json.dumps(data, ensure_ascii=False))
+
+def nome_expr():
+    return "COALESCE(c.name, ct.\"pushName\", '')"
+
+def instancias(cfg, args):
+    q = """SELECT COALESCE(json_agg(json_build_object(
+      'nome', name, 'estado', "connectionStatus"
+    ) ORDER BY name), '[]'::json) FROM "Instance";"""
+    out(query_json(cfg, q))
+
+def grupos(cfg, args):
+    busca = args.busca or ""
+    lim = min(args.limite or 30, MAX_ROWS)
+    if busca:
+        where = (
+            f"(COALESCE(c.name,'') ILIKE {lit(like_pat(busca))} OR "
+            + ACCENT_SQL.format(col="COALESCE(c.name,'')")
+            + f" LIKE {lit(fold_like(busca))})"
+        )
+    else:
+        where = "true"
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.atualizado DESC NULLS LAST), '[]'::json) FROM (
+      SELECT i.name AS instancia, c."remoteJid" AS jid,
+             COALESCE(c.name, '') AS nome,
+             to_char(c."updatedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS atualizado
+      FROM "Chat" c
+      JOIN "Instance" i ON i.id = c."instanceId"
+      WHERE c."remoteJid" LIKE '%@g.us' AND {where}
+      ORDER BY c."updatedAt" DESC NULLS LAST
+      LIMIT {int(lim)}
+    ) x;"""
+    out(query_json(cfg, q))
+
+def chats(cfg, args):
+    busca = args.busca or ""
+    lim = min(args.limite or 40, MAX_ROWS)
+    inst_f = f"AND i.name = {lit(args.instancia)}" if args.instancia else ""
+    if busca:
+        where = (
+            f"(COALESCE(c.name,'') ILIKE {lit(like_pat(busca))} OR "
+            f"COALESCE(ct.\"pushName\",'') ILIKE {lit(like_pat(busca))} OR "
+            f"c.\"remoteJid\" ILIKE {lit(like_pat(busca))} OR "
+            + ACCENT_SQL.format(col="COALESCE(c.name, ct.\"pushName\", '')")
+            + f" LIKE {lit(fold_like(busca))})"
+        )
+    else:
+        where = "true"
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.atualizado DESC NULLS LAST), '[]'::json) FROM (
+      SELECT i.name AS instancia, c."remoteJid" AS jid,
+             {nome_expr()} AS nome,
+             to_char(c."updatedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS atualizado
+      FROM "Chat" c
+      JOIN "Instance" i ON i.id = c."instanceId"
+      LEFT JOIN "Contact" ct ON ct."remoteJid" = c."remoteJid" AND ct."instanceId" = c."instanceId"
+      WHERE 1=1 {inst_f} AND {where}
+      ORDER BY c."updatedAt" DESC NULLS LAST
+      LIMIT {int(lim)}
+    ) x;"""
+    out(query_json(cfg, q))
+
+def resolve_chat(cfg, chat, instancia):
+    inst_f = f"AND i.name = {lit(instancia)}" if instancia else ""
+    if "@" in chat and " " not in chat.strip():
+        q = f"""
+        SELECT COALESCE(json_agg(json_build_object(
+          'instancia', i.name, 'jid', c."remoteJid", 'nome', COALESCE(c.name,'')
+        )), '[]'::json)
+        FROM "Chat" c JOIN "Instance" i ON i.id=c."instanceId"
+        WHERE c."remoteJid" = {lit(chat)} {inst_f};"""
+        return query_json(cfg, q) or []
+    digits = re.sub(r"\D", "", chat)
+    raw = chat.replace("+", "").replace("-", "").replace(" ", "")
+    if digits and digits == raw:
+        variants = {digits + "@s.whatsapp.net"}
+        if digits.startswith("55") and len(digits) == 13:
+            variants.add(digits[:4] + digits[5:] + "@s.whatsapp.net")
+        elif digits.startswith("55") and len(digits) == 12:
+            variants.add(digits[:4] + "9" + digits[4:] + "@s.whatsapp.net")
+        vals = ",".join(lit(v) for v in variants)
+        q = f"""
+        SELECT COALESCE(json_agg(json_build_object(
+          'instancia', i.name, 'jid', c."remoteJid", 'nome', COALESCE(c.name,'')
+        )), '[]'::json)
+        FROM "Chat" c JOIN "Instance" i ON i.id=c."instanceId"
+        WHERE c."remoteJid" IN ({vals}) {inst_f};"""
+        return query_json(cfg, q) or []
+    busca = chat
+    where = (
+        f"(COALESCE(c.name,'') ILIKE {lit(like_pat(busca))} OR "
+        f"COALESCE(ct.\"pushName\",'') ILIKE {lit(like_pat(busca))} OR "
+        + ACCENT_SQL.format(col="COALESCE(c.name, ct.\"pushName\", '')")
+        + f" LIKE {lit(fold_like(busca))})"
+    )
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.atualizado DESC NULLS LAST), '[]'::json) FROM (
+      SELECT i.name AS instancia, c."remoteJid" AS jid,
+             {nome_expr()} AS nome,
+             to_char(c."updatedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS atualizado
+      FROM "Chat" c
+      JOIN "Instance" i ON i.id = c."instanceId"
+      LEFT JOIN "Contact" ct ON ct."remoteJid" = c."remoteJid" AND ct."instanceId" = c."instanceId"
+      WHERE 1=1 {inst_f} AND {where}
+      ORDER BY c."updatedAt" DESC NULLS LAST
+      LIMIT 15
+    ) x;"""
+    return query_json(cfg, q) or []
+
+def mensagens(cfg, args):
+    lim = min(args.limite or 30, MAX_ROWS)
+    desde = parse_desde(args.desde)
+    targets = resolve_chat(cfg, args.chat, args.instancia)
+    if not targets:
+        out({"erro": "chat nao encontrado", "busca": args.chat})
+        return
+    clauses = " OR ".join(
+        f"(i.name = {lit(t['instancia'])} AND m.key->>'remoteJid' = {lit(t['jid'])})"
+        for t in targets
+    )
+    desde_f = f"AND m.\"messageTimestamp\" >= {int(desde)}" if desde else ""
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.ts_epoch), '[]'::json) FROM (
+      SELECT i.name AS instancia,
+             m.key->>'remoteJid' AS chat,
+             COALESCE(ch.name, '') AS chat_nome,
+             {ts_sp()} AS ts,
+             m."messageTimestamp" AS ts_epoch,
+             (m.key->>'fromMe')::boolean AS "fromMe",
+             COALESCE(m."pushName", m.participant, '') AS remetente,
+             m."messageType" AS tipo,
+             left({TEXT_EXPR}, 500) AS texto,
+             m.key->>'id' AS id,
+             m."contextInfo"->>'stanzaId' AS quote_id
+      FROM "Message" m
+      JOIN "Instance" i ON i.id = m."instanceId"
+      LEFT JOIN "Chat" ch ON ch."remoteJid" = m.key->>'remoteJid' AND ch."instanceId" = m."instanceId"
+      WHERE ({clauses}) {desde_f}
+      ORDER BY m."messageTimestamp" DESC
+      LIMIT {int(lim)}
+    ) x;"""
+    rows = query_json(cfg, q) or []
+    if isinstance(rows, list):
+        rows = list(reversed(rows))
+    out({"total": len(rows), "chats": targets, "mensagens": rows})
+
+def enviadas(cfg, args):
+    busca = args.busca
+    lim = min(args.limite or 50, MAX_ROWS)
+    desde = parse_desde(args.desde) or int((datetime.now(tz=SP) - timedelta(days=14)).timestamp())
+    inst_f = f"AND i.name = {lit(args.instancia)}" if args.instancia else ""
+    # Prefer Filipe over Filipe_2 duplicates: fetch extra then dedupe in SQL via DISTINCT ON chat+ts text
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.ts_epoch DESC), '[]'::json) FROM (
+      SELECT DISTINCT ON (m.key->>'remoteJid', m."messageTimestamp")
+             i.name AS instancia,
+             m.key->>'remoteJid' AS chat,
+             COALESCE(ch.name, ct."pushName", '') AS chat_nome,
+             {ts_sp()} AS ts,
+             m."messageTimestamp" AS ts_epoch,
+             left({TEXT_EXPR}, 300) AS texto,
+             m.key->>'id' AS id
+      FROM "Message" m
+      JOIN "Instance" i ON i.id = m."instanceId"
+      LEFT JOIN "Chat" ch ON ch."remoteJid" = m.key->>'remoteJid' AND ch."instanceId" = m."instanceId"
+      LEFT JOIN "Contact" ct ON ct."remoteJid" = m.key->>'remoteJid' AND ct."instanceId" = m."instanceId"
+      WHERE (m.key->>'fromMe') = 'true'
+        AND m."messageTimestamp" >= {int(desde)}
+        AND m."messageType" IN ('conversation','extendedTextMessage','imageMessage','videoMessage')
+        {inst_f}
+        AND (
+          m.message->>'conversation' ILIKE {lit(like_pat(busca))}
+          OR m.message->'extendedTextMessage'->>'text' ILIKE {lit(like_pat(busca))}
+          OR m.message->'imageMessage'->>'caption' ILIKE {lit(like_pat(busca))}
+        )
+      ORDER BY m.key->>'remoteJid', m."messageTimestamp" DESC, i.name
+      LIMIT {int(lim)}
+    ) x;"""
+    rows = query_json(cfg, q) or []
+    out({"total": len(rows), "desde_epoch": desde, "enviadas": rows})
+
+def participantes_grupo(cfg, jid, instancia):
+    q = f"""
+    SELECT COALESCE(json_agg(DISTINCT x.p), '[]'::json) FROM (
+      SELECT COALESCE(m.participant, m.key->>'participant') AS p
+      FROM "Message" m
+      JOIN "Instance" i ON i.id = m."instanceId"
+      WHERE i.name = {lit(instancia)}
+        AND m.key->>'remoteJid' = {lit(jid)}
+        AND (m.key->>'fromMe') = 'false'
+        AND m."messageTimestamp" >= extract(epoch from now() - interval '180 days')::int
+        AND COALESCE(m.participant, m.key->>'participant') IS NOT NULL
+    ) x;"""
+    return [p for p in (query_json(cfg, q) or []) if p]
+
+def respostas(cfg, args):
+    lim = min(args.limite or 100, MAX_ROWS)
+    desde = parse_desde(args.desde) or int((datetime.now(tz=SP) - timedelta(days=7)).timestamp())
+    apos = args.apos
+    apos_ts = None
+    apos_id = None
+    if apos:
+        if re.fullmatch(r"\d{9,}", apos):
+            apos_ts = int(apos)
+        elif re.match(r"^\d{4}-\d{2}-\d{2}", apos):
+            apos_ts = parse_desde(apos)
+        else:
+            apos_id = apos
+
+    if args.busca and not args.chat:
+        # One-shot SQL: invites + first replies per chat (dedupe Filipe/Filipe_2)
+        q = f"""
+        WITH invites_raw AS (
+          SELECT i.name AS instancia,
+                 m.key->>'remoteJid' AS chat,
+                 COALESCE(ch.name, ct."pushName", '') AS chat_nome,
+                 m."messageTimestamp" AS ts_epoch,
+                 m.key->>'id' AS id,
+                 left({TEXT_EXPR}, 200) AS texto,
+                 row_number() OVER (
+                   PARTITION BY m.key->>'remoteJid'
+                   ORDER BY m."messageTimestamp" ASC, i.name ASC
+                 ) AS rn
+          FROM "Message" m
+          JOIN "Instance" i ON i.id = m."instanceId"
+          LEFT JOIN "Chat" ch ON ch."remoteJid" = m.key->>'remoteJid' AND ch."instanceId" = m."instanceId"
+          LEFT JOIN "Contact" ct ON ct."remoteJid" = m.key->>'remoteJid' AND ct."instanceId" = m."instanceId"
+          WHERE (m.key->>'fromMe') = 'true'
+            AND m."messageTimestamp" >= {int(desde)}
+            AND m."messageType" IN ('conversation','extendedTextMessage','imageMessage')
+            AND (
+              m.message->>'conversation' ILIKE {lit(like_pat(args.busca))}
+              OR m.message->'extendedTextMessage'->>'text' ILIKE {lit(like_pat(args.busca))}
+            )
+        ),
+        invites AS (
+          SELECT * FROM invites_raw WHERE rn = 1
+        ),
+        replies AS (
+          SELECT inv.chat,
+                 inv.instancia,
+                 inv.chat_nome,
+                 inv.id AS convite_id,
+                 inv.ts_epoch AS convite_ts,
+                 COALESCE(json_agg(
+                   json_build_object(
+                     'ts', to_char(to_timestamp(r."messageTimestamp") AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD"T"HH24:MI:SS-03:00'),
+                     'remetente', COALESCE(r."pushName", ''),
+                     'texto', left(COALESCE(
+                        r.message->>'conversation',
+                        r.message->'extendedTextMessage'->>'text',
+                        r.message->'imageMessage'->>'caption', ''
+                     ), 400),
+                     'id', r.key->>'id',
+                     'quote_id', r."contextInfo"->>'stanzaId',
+                     'tipo', r."messageType"
+                   ) ORDER BY r."messageTimestamp"
+                 ) FILTER (WHERE r.id IS NOT NULL), '[]'::json) AS respostas
+          FROM invites inv
+          JOIN "Instance" i ON i.name = inv.instancia
+          LEFT JOIN "Message" r ON r."instanceId" = i.id
+            AND r.key->>'remoteJid' = inv.chat
+            AND (r.key->>'fromMe') = 'false'
+            AND r."messageTimestamp" > inv.ts_epoch
+            AND r."messageType" IS DISTINCT FROM 'reactionMessage'
+          GROUP BY inv.chat, inv.instancia, inv.chat_nome, inv.id, inv.ts_epoch
+        )
+        SELECT json_build_object(
+          'modo', 'broadcast',
+          'busca', {lit(args.busca)},
+          'total_destinatarios', (SELECT count(*) FROM replies),
+          'com_resposta', (SELECT count(*) FROM replies WHERE respostas::text <> '[]'),
+          'sem_resposta', (SELECT count(*) FROM replies WHERE respostas::text = '[]'),
+          'itens', COALESCE((
+            SELECT json_agg(json_build_object(
+              'chat', chat,
+              'chat_nome', chat_nome,
+              'instancia', instancia,
+              'convite_id', convite_id,
+              'convite_ts', to_char(to_timestamp(convite_ts) AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD"T"HH24:MI:SS-03:00'),
+              'respostas', respostas,
+              'reacoes', '[]'::json,
+              'status', CASE WHEN respostas::text = '[]' THEN 'sem_resposta' ELSE 'respondeu' END
+            ) ORDER BY convite_ts)
+            FROM (SELECT * FROM replies LIMIT {int(lim)}) z
+          ), '[]'::json)
+        );
+        """
+        out(query_json(cfg, q) or {})
+        return
+
+    if not args.chat:
+        raise SystemExit("--chat ou --busca obrigatorio")
+    targets = resolve_chat(cfg, args.chat, args.instancia)
+    if not targets:
+        out({"erro": "chat nao encontrado", "busca": args.chat})
+        return
+    t = targets[0]
+    if apos_id and not apos_ts:
+        q_ts = f"""
+        SELECT COALESCE(to_json(m."messageTimestamp"), 'null'::json)
+        FROM "Message" m JOIN "Instance" i ON i.id=m."instanceId"
+        WHERE i.name = {lit(t["instancia"])}
+          AND m.key->>'remoteJid' = {lit(t["jid"])}
+          AND m.key->>'id' = {lit(apos_id)}
+        LIMIT 1;"""
+        got = query_json(cfg, q_ts)
+        if got not in (None, [], "null"):
+            apos_ts = int(got if isinstance(got, int) else got)
+    if not apos_ts:
+        apos_ts = desde
+    q = f"""
+    SELECT COALESCE(json_agg(x ORDER BY x.ts_epoch), '[]'::json) FROM (
+      SELECT i.name AS instancia,
+             {ts_sp()} AS ts,
+             m."messageTimestamp" AS ts_epoch,
+             (m.key->>'fromMe')::boolean AS "fromMe",
+             COALESCE(m."pushName", m.participant, '') AS remetente,
+             m.participant AS participant_jid,
+             left({TEXT_EXPR}, 400) AS texto,
+             m.key->>'id' AS id,
+             m."contextInfo"->>'stanzaId' AS quote_id,
+             m."messageType" AS tipo
+      FROM "Message" m
+      JOIN "Instance" i ON i.id = m."instanceId"
+      WHERE i.name = {lit(t["instancia"])}
+        AND m.key->>'remoteJid' = {lit(t["jid"])}
+        AND m."messageTimestamp" > {int(apos_ts)}
+        AND (m.key->>'fromMe') = 'false'
+      ORDER BY m."messageTimestamp" ASC
+      LIMIT {int(lim)}
+    ) x;"""
+    reps = query_json(cfg, q) or []
+    parts = participantes_grupo(cfg, t["jid"], t["instancia"]) if str(t["jid"]).endswith("@g.us") else []
+    who = {r.get("participant_jid") or r.get("remetente") or "" for r in reps}
+    who.discard("")
+    out({
+        "modo": "chat",
+        "chat": t,
+        "apos_ts": apos_ts,
+        "respostas": reps,
+        "participantes_vistos": parts,
+        "responderam": len(who),
+        "sem_resposta_estimados": (max(0, len(parts) - len(who)) if parts else None),
+    })
+
+def main():
+    p = argparse.ArgumentParser(prog="evo-db")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("instancias")
+    g = sub.add_parser("grupos")
+    g.add_argument("--busca")
+    g.add_argument("--limite", type=int, default=30)
+    c = sub.add_parser("chats")
+    c.add_argument("--busca")
+    c.add_argument("--instancia")
+    c.add_argument("--limite", type=int, default=40)
+    m = sub.add_parser("mensagens")
+    m.add_argument("--chat", required=True)
+    m.add_argument("--instancia")
+    m.add_argument("--desde")
+    m.add_argument("--limite", type=int, default=30)
+    e = sub.add_parser("enviadas")
+    e.add_argument("--busca", required=True)
+    e.add_argument("--desde")
+    e.add_argument("--instancia")
+    e.add_argument("--limite", type=int, default=50)
+    r = sub.add_parser("respostas")
+    r.add_argument("--apos")
+    r.add_argument("--chat")
+    r.add_argument("--busca")
+    r.add_argument("--desde")
+    r.add_argument("--instancia")
+    r.add_argument("--limite", type=int, default=100)
+    args = p.parse_args()
+    cfg = load_conf()
+    {
+        "instancias": instancias,
+        "grupos": grupos,
+        "chats": chats,
+        "mensagens": mensagens,
+        "enviadas": enviadas,
+        "respostas": respostas,
+    }[args.cmd](cfg, args)
+
+if __name__ == "__main__":
+    main()
