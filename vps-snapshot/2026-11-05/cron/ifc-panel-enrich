@@ -1,0 +1,1 @@
+*/5 * * * * root timeout 900 /usr/bin/python3 /opt/ifc-painel/mcp/panel_enrich.py >>/var/log/ifc-panel-enrich.log 2>&1

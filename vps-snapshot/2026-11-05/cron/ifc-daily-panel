@@ -1,0 +1,2 @@
+# Python enforces BRT: prepare digests 06:19/22:15 and panel 07:20/12:30; publish panel 08:00/13:30.
+* * * * * root /usr/bin/python3 /opt/ifc-painel/mcp/digest_schedule.py >>/var/log/ifc-daily-panel.log 2>&1
