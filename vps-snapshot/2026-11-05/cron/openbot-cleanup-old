@@ -1,0 +1,1 @@
+30 10 11 11 * root [ "$(date +\%Y)" = 2026 ] && /usr/local/bin/openbot-cleanup-old.sh

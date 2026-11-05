@@ -1,0 +1,2 @@
+# OpenBot auto-update diário 04:30 America/Sao_Paulo (fora de resumos/backup/atividades)
+30 4 * * * root /usr/local/bin/openbot-update.sh >>/var/log/openbot-update.log 2>&1

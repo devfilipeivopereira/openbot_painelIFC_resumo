@@ -1,0 +1,2 @@
+30 23 * * * /usr/local/bin/atividades-daily.sh  # planilha atividades Filipe
+0 7 * * 1 cd /opt/atividades && flock -w 1800 /tmp/atividades.lock timeout 1800 python3 relatorio_semanal.py last >> /var/log/atividades.log 2>&1  # relatorio produtividade semanal

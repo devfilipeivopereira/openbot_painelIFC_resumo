@@ -1,0 +1,1 @@
+0 23 * * * root flock -n /run/contatos.lock /usr/local/bin/contato sync >> /var/log/contatos.log 2>&1
