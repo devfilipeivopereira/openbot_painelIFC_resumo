@@ -1,0 +1,48 @@
+#!/bin/bash
+# evo-ler — leitura WhatsApp via Postgres Evolution (host evo-db).
+# Credenciais: /etc/evo-db/pg.env (600) no host; nunca impressas.
+# Uso: instancias | grupos | chats | mensagens | enviadas | respostas | busca
+set -euo pipefail
+VPS=/data/.config/OpenBot/bin/vps-root
+B=https://evolution.filipeivopereira.com
+H=/data/.config/evo/global.h
+JQ=/data/.local/bin/jq
+cmd=${1:-}; shift || true
+
+db() {
+  # Empacota argv em base64+NUL para o SSH não destruir espaços
+  local b64
+  b64=$(printf '%s\0' "$@" | base64 -w0)
+  "$VPS" "printf '%s' '$b64' | base64 -d | xargs -0 /usr/local/bin/evo-db"
+}
+
+try_db() {
+  if out=$(db "$@" 2>/tmp/evo-ler.err); then
+    printf '%s\n' "$out"
+    return 0
+  fi
+  return 1
+}
+
+case $cmd in
+  instancias)
+    try_db instancias && exit 0
+    curl -sS --max-time 30 -H @$H "$B/instance/fetchInstances" | $JQ '[.[]|{nome:.name,estado:.connectionStatus}]'
+    ;;
+  grupos|chats|mensagens|enviadas|respostas)
+    if try_db "$cmd" "$@"; then exit 0; fi
+    echo '{"erro":"evo-db falhou","detalhe":"'"$(tr -d '\n' </tmp/evo-ler.err | head -c 300)"'"}' >&2
+    exit 2
+    ;;
+  busca)
+    CONTATO=""; LIM=10
+    while [ $# -gt 0 ]; do case $1 in --contato|--chat) CONTATO=$2; shift 2;; --limite) LIM=$2; shift 2;; *) shift;; esac; done
+    [ -n "$CONTATO" ] || { echo "--contato obrigatorio" >&2; exit 2; }
+    try_db mensagens --chat "$CONTATO" --limite "$LIM" && exit 0
+    echo '{"erro":"evo-db falhou","detalhe":"'"$(tr -d '\n' </tmp/evo-ler.err | head -c 300)"'"}' >&2
+    exit 2
+    ;;
+  *)
+    sed -n '2,8p' "$0"; exit 2
+    ;;
+esac
